@@ -8,6 +8,7 @@
 #include "optionsmodel.h"
 #include "coincontrol.h"
 #include "qcomboboxfiltercoins.h"
+#include "bitcoinrpc.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -177,8 +178,8 @@ void CoinControlDialog::buttonSelectAllClicked()
         if (ui->treeWidget->topLevelItem(i)->checkState(COLUMN_CHECKBOX) != Qt::Unchecked)
         {
             state = Qt::Unchecked;
-            break;
         }
+		coinControl->UnSelectAll();
     }
     ui->treeWidget->setEnabled(false);
     for (int i = 0; i < ui->treeWidget->topLevelItemCount(); i++)
@@ -607,10 +608,16 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
         int64_t nFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
         
         // Min Fee
-        int64_t nMinFee = txDummy.GetMinFee(1, GMF_SEND, nBytes, true);
+        int64_t nMinFee = txDummy.GetMinFee(1, false, GMF_SEND, nBytes);
         
         nPayFee = max(nFee, nMinFee);
-        
+
+        //nPayFee = nFee;
+		if(pwalletMain->fSplitBlock)
+		{
+			nPayFee = COIN / 10; // make the fee more expensive if using splitblock, this avoids having to calc fee based on multiple vouts
+		}
+	        
         if (nPayAmount > 0)
         {
             nChange = nAmount - nPayFee - nPayAmount;
@@ -744,18 +751,29 @@ void CoinControlDialog::updateView()
         double dPrioritySum = 0;
         int nChildren = 0;
         int nInputSum = 0;
-		uint64_t nTxWeight = 0, nTxWeightSum = 0;
+		uint64_t nTxWeight = 0;
+		uint64_t nDisplayWeight = 0;
+		uint64_t nTxWeightSum = 0;
 		GetLastBlockIndex(pindexBest, false);
 		int64_t nBestHeight = pindexBest->nHeight;
 	
         BOOST_FOREACH(const COutput& out, coins.second)
         {
-            int nInputSize = 148; // 180 if uncompressed public key
+           
+			int64_t nHeight = nBestHeight - out.nDepth;
+			CBlockIndex* pindex = FindBlockByHeight(nHeight);
+			
+			int nInputSize = 148; // 180 if uncompressed public key
             nSum += out.tx->vout[out.i].nValue;
             nChildren++;
 			
 			model->getStakeWeightFromValue(out.tx->GetTxTime(), out.tx->vout[out.i].nValue, nTxWeight);
-			nTxWeightSum += nTxWeight;
+			if ((GetTime() - pindex->nTime) < (60*60*24*2))
+				nDisplayWeight = 0;
+			else
+				nDisplayWeight = nTxWeight;
+			
+			nTxWeightSum += nDisplayWeight;
 			
             QTreeWidgetItem *itemOutput;
             if (treeMode)    itemOutput = new QTreeWidgetItem(itemWalletAddress);
@@ -798,12 +816,11 @@ void CoinControlDialog::updateView()
             }
 
             // amount
+			uint64_t nBlockSize = out.tx->vout[out.i].nValue / 100000000; //used in formulas below
             itemOutput->setText(COLUMN_AMOUNT, BitcoinUnits::format(nDisplayUnit, out.tx->vout[out.i].nValue));
             itemOutput->setText(COLUMN_AMOUNT_INT64, strPad(QString::number(out.tx->vout[out.i].nValue), 15, " ")); // padding so that sorting works correctly
 
             // date
-			int64_t nHeight = nBestHeight - out.nDepth;
-			CBlockIndex* pindex = FindBlockByHeight(nHeight);
 			int64_t nTime = pindex->nTime;
             itemOutput->setText(COLUMN_DATE, QDateTime::fromTime_t(nTime).toString("yy-MM-dd hh:mm"));
             
@@ -827,10 +844,20 @@ void CoinControlDialog::updateView()
 			itemOutput->setText(COLUMN_WEIGHT, strPad(QString::number(nTxWeight), 8, " "));
 
 			// Age
-			int64_t age = COIN * (GetTime() - nTime) / (1440 * 60);
+			uint64_t nAge = (GetTime() - nTime);
+			int64_t age = COIN * nAge / (1440 * 60);
 			itemOutput->setText(COLUMN_AGE, strPad(BitcoinUnits::formatAge(nDisplayUnit, age), 2, " "));
 			itemOutput->setText(COLUMN_AGE_INT64, strPad(QString::number(age), 15, " "));
-				
+
+			// Estimated Stake Time
+			uint64_t nMin = 1;
+			nBlockSize = qMax(nBlockSize, nMin);
+			uint64_t nTimeToMaturity = 0;
+			uint64_t nBlockWeight = qMax(nDisplayWeight, uint64_t(nBlockSize * 2)); // default to using weight at 2 days for calc
+			double dAge = nAge;
+			if (172800 - dAge >= 0 ) // 172800 seconds is 2 days
+				nTimeToMaturity = (172800 - nAge);
+			
             // transaction hash
             uint256 txhash = out.tx->GetHash();
             itemOutput->setText(COLUMN_TXHASH, txhash.GetHex().c_str());
