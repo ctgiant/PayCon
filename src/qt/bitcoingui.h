@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include <QSystemTrayIcon>
 
+#include "util.h" // for uint64_t
+
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
@@ -107,6 +109,8 @@ private:
     QAction *openRPCConsoleAction;
 	QAction *themeDefaultAction;
 	QAction *themeCustomAction;
+	QAction *connectionIconAction;
+	QAction *stakingIconAction;
 
     QSystemTrayIcon *trayIcon;
     Notificator *notificator;
@@ -114,6 +118,18 @@ private:
     RPCConsole *rpcConsole;
 
     QMovie *syncIconMovie;
+
+    QMovie *miningIconMovie;
+
+    uint64_t nMinMax;
+    uint64_t nWeight;
+    uint64_t nNetworkWeight;
+	uint64_t nHoursToMaturity;
+	uint64_t nAmount;
+	bool fMultiSend;
+	bool fMultiSendNotify;
+	int nCharityPercent;
+	QString strCharityAddress;
 	
 	/* Themes support */
     QString selectedTheme;
@@ -178,7 +194,8 @@ private slots:
     void gotoSignMessageTab(QString addr = "");
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
-
+	/** Allow user to unlock wallet from click */
+	void lockIconClicked();
     /** Show configuration dialog */
     void optionsClicked();
     /** Show about dialog */
