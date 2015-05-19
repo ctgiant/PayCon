@@ -19,7 +19,6 @@
 #include "util.h"
 #include "walletdb.h"
 
-extern bool fWalletUnlockStakingOnly;
 extern bool fConfChange;
 class CAccountingEntry;
 class CWalletTx;
@@ -88,6 +87,7 @@ public:
 
     bool fFileBacked;
     std::string strWalletFile;
+	bool fWalletUnlockMintOnly;
 	bool fStakeForCharity;
 	int nStakeForCharityPercent;
 	CBitcoinAddress StakeForCharityAddress;
@@ -122,6 +122,7 @@ public:
         nMasterKeyMaxID = 0;
         pwalletdbEncryption = NULL;
         nOrderPosNext = 0;
+		fWalletUnlockMintOnly = false;
 		fStakeForCharity = false;
         nStakeForCharityPercent = 0;
         StakeForCharityAddress = "";
@@ -149,6 +150,7 @@ public:
         nMasterKeyMaxID = 0;
         pwalletdbEncryption = NULL;
         nOrderPosNext = 0;
+		fWalletUnlockMintOnly = false;
 		fStakeForCharity = false;
         nStakeForCharityPercent = 0;
         StakeForCharityAddress = "";
