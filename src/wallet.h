@@ -247,7 +247,7 @@ public:
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
 
     bool GetStakeWeight(const CKeyStore& keystore, uint64_t& nMinWeight, uint64_t& nMaxWeight, uint64_t& nWeight);
-	bool GetStakeWeight2(const CKeyStore& keystore, uint64_t& nMinWeight, uint64_t& nMaxWeight, uint64_t& nWeight);
+	bool GetStakeWeight2(const CKeyStore& keystore, uint64_t& nMinWeight, uint64_t& nMaxWeight, uint64_t& nWeight, uint64_t& nHoursToMaturity, uint64_t& nAmount);
     bool CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, CKey& key);
 	bool GetStakeWeightFromValue(const int64_t nTime, const int64_t nValue, uint64_t& nWeight);
     std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false, bool fAllowStakeForCharity=false);

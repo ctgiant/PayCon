@@ -235,9 +235,12 @@ private slots:
     /** simply calls showNormalIfMinimized(true) for use in SLOT() macro */
     void toggleHidden();
 
-    void updateStakingIcon();
-	
-	/** Load external QSS stylesheet */
+    /** Update info about minting */
+    void updateMintingIcon();
+    /** Update minting weight info */
+    void updateMintingWeights();
+	void charityClicked(QString addr = "");
+    /** Load external QSS stylesheet */
     void changeTheme(QString theme);
     void loadTheme(QString theme);
     void listThemes(QStringList& themes);
