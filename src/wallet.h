@@ -236,6 +236,7 @@ public:
     void ReacceptWalletTransactions();
     void ResendWalletTransactions(bool fForce = false);
     int64_t GetBalance() const;
+	int64_t GetBalanceV1() const;
     int64_t GetUnconfirmedBalance() const;
     int64_t GetImmatureBalance() const;
     int64_t GetStake() const;
@@ -690,10 +691,10 @@ public:
         return nChangeCached;
     }
 
-    void GetAmounts(std::list<std::pair<CTxDestination, int64_t> >& listReceived,
+    void GetAmounts(int64_t& nGeneratedImmature, int64_t& nGeneratedMature, std::list<std::pair<CTxDestination, int64_t> >& listReceived,
                     std::list<std::pair<CTxDestination, int64_t> >& listSent, int64_t& nFee, std::string& strSentAccount) const;
 
-    void GetAccountAmounts(const std::string& strAccount, int64_t& nReceived,
+    void GetAccountAmounts(const std::string& strAccount, int64_t& nGeneratedImmature, int64_t& nGeneratedMature, int64_t& nReceived,
                            int64_t& nSent, int64_t& nFee) const;
 
     bool IsFromMe() const
@@ -701,17 +702,29 @@ public:
         return (GetDebit() > 0);
     }
 
-    bool IsTrusted() const
+    bool IsConfirmed() const
     {
         // Quick answer in most cases
         if (!IsFinal())
             return false;
-        int nDepth = GetDepthInMainChain();
-        if (nDepth >= 1)
+        if (GetDepthInMainChain() >= 1)
             return true;
-        if (nDepth < 0)
+        if (!IsFromMe()) // using wtx's cached debit
             return false;
-        if (fConfChange || !IsFromMe()) // using wtx's cached debit
+		
+		//presstab PayCon, removed code that checks walletdb for confirmation, we want blockchain info only
+		
+        return false;
+    }
+
+	bool IsConfirmedV1() const //will use this for rpc getbalance, so that it reports unconfirmed intrawallet transfers as part of your total balance
+    {
+        // Quick answer in most cases
+        if (!IsFinal())
+            return false;
+        if (GetDepthInMainChain() >= 1)
+            return true;
+        if (!IsFromMe()) // using wtx's cached debit
             return false;
 
         // If no confirmations but it's from us, we can still
@@ -726,11 +739,8 @@ public:
 
             if (!ptx->IsFinal())
                 return false;
-            int nPDepth = ptx->GetDepthInMainChain();
-            if (nPDepth >= 1)
+            if (ptx->GetDepthInMainChain() >= 1)
                 continue;
-            if (nPDepth < 0)
-                return false;
             if (!pwallet->IsFromMe(*ptx))
                 return false;
 

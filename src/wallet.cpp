@@ -689,10 +689,10 @@ int CWalletTx::GetRequestCount() const
     return nRequests;
 }
 
-void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
+void CWalletTx::GetAmounts(int64_t& nGeneratedImmature, int64_t& nGeneratedMature, list<pair<CTxDestination, int64_t> >& listReceived,
                            list<pair<CTxDestination, int64_t> >& listSent, int64_t& nFee, string& strSentAccount) const
 {
-    nFee = 0;
+    nGeneratedImmature = nGeneratedMature = nFee = 0;
     listReceived.clear();
     listSent.clear();
     strSentAccount = strFromAccount;
@@ -746,22 +746,24 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
 
 }
 
-void CWalletTx::GetAccountAmounts(const string& strAccount, int64_t& nReceived,
+void CWalletTx::GetAccountAmounts(const string& strAccount, int64_t& nGeneratedImmature, int64_t& nGeneratedMature, int64_t& nReceived,
                                   int64_t& nSent, int64_t& nFee) const
 {
-    nReceived = nSent = nFee = 0;
+    nGeneratedImmature = nGeneratedMature = nReceived = nSent = nFee = 0;
 
-    int64_t allFee;
+    int64_t allGeneratedImmature, allGeneratedMature, allFee;
     string strSentAccount;
     list<pair<CTxDestination, int64_t> > listReceived;
     list<pair<CTxDestination, int64_t> > listSent;
-    GetAmounts(listReceived, listSent, allFee, strSentAccount);
+    GetAmounts(allGeneratedImmature, allGeneratedMature, listReceived, listSent, allFee, strSentAccount);
 
     if (strAccount == strSentAccount)
     {
         BOOST_FOREACH(const PAIRTYPE(CTxDestination,int64_t)& s, listSent)
             nSent += s.second;
         nFee = allFee;
+		nGeneratedImmature = allGeneratedImmature;
+		nGeneratedMature = allGeneratedMature;
     }
     {
         LOCK(pwallet->cs_wallet);
@@ -1040,11 +1042,26 @@ int64_t CWallet::GetBalance() const
         for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletTx* pcoin = &(*it).second;
-            if (pcoin->IsTrusted())
+            if (pcoin->IsFinal() && pcoin->IsConfirmed())
                 nTotal += pcoin->GetAvailableCredit();
         }
     }
 
+    return nTotal;
+}
+
+int64_t CWallet::GetBalanceV1() const //use this for getbalance rpc call so that it will return intra wallet transactions as confirmed
+{
+    int64_t nTotal = 0;
+    {
+        LOCK(cs_wallet);
+        for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        {
+            const CWalletTx* pcoin = &(*it).second;
+            if (pcoin->IsFinal() && pcoin->IsConfirmedV1())
+                nTotal += pcoin->GetAvailableCredit();
+        }
+    }
     return nTotal;
 }
 
@@ -1056,14 +1073,14 @@ int64_t CWallet::GetUnconfirmedBalance() const
         for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletTx* pcoin = &(*it).second;
-            if (!pcoin->IsFinal() || !pcoin->IsTrusted())
+            if (!pcoin->IsFinal() || !pcoin->IsConfirmed())
                 nTotal += pcoin->GetAvailableCredit();
         }
     }
     return nTotal;
 }
 
-int64_t CWallet::GetImmatureBalance() const
+int64 CWallet::GetImmatureBalance() const
 {
     int64_t nTotal = 0;
     {
@@ -1092,7 +1109,7 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
             if (!pcoin->IsFinal())
                 continue;
 
-            if (fOnlyConfirmed && !pcoin->IsTrusted())
+            if (fOnlyConfirmed && !pcoin->IsConfirmed())
                 continue;
 
             if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity() > 0)
@@ -1664,17 +1681,24 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
     return true;
 }
 
-bool CWallet::MintableCoins()
+bool CWallet::SelectStakeCoins(std::set<std::pair<const CWalletTx*,unsigned int> >& setCoins, int64_t nTargetAmount) const
 {
 	vector<COutput> vCoins;
     AvailableCoins(vCoins, true);
+	int64_t nAmountSelected = 0;
 	
 	BOOST_FOREACH(const COutput& out, vCoins)
 	{
-		if(GetTime() - out.tx->GetTxTime() > nStakeMinAge)
-			return true;
+		if(nAmountSelected + out.tx->vout[out.i].nValue < nTargetAmount)
+		{
+			if(GetTime() - out.tx->GetTxTime() > nStakeMinAgeV2)
+			{
+				setCoins.insert(make_pair(out.tx, out.i));
+				nAmountSelected += out.tx->vout[out.i].nValue;
+			}
+		}
 	}
-	return false;
+	return true;
 }
 
 bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl) const
@@ -1778,6 +1802,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         CTxDB txdb("r");
         {
             nFeeRet = nTransactionFee;
+			if(fSplitBlock)
+				nFeeRet = COIN / 10;
             while (true)
             {
                 wtxNew.vin.clear();
@@ -1920,6 +1946,9 @@ bool CWallet::GetStakeWeight(const CKeyStore& keystore, uint64_t& nMinWeight, ui
     // Choose coins to use
     int64_t nBalance = GetBalance();
 
+    int64 nReserveBalance = 0;
+    if (mapArgs.count("-reservebalance") && !ParseMoney(mapArgs["-reservebalance"], nReserveBalance))
+        return error("CreateCoinStake : invalid reserve balance amount");
     if (nBalance <= nReserveBalance)
         return false;
 
@@ -1969,7 +1998,7 @@ bool CWallet::GetStakeWeight(const CKeyStore& keystore, uint64_t& nMinWeight, ui
     return true;
 }
 
-bool CWallet::GetStakeWeight2(const CKeyStore& keystore, uint64_t& nMinWeight, uint64_t& nMaxWeight, uint64_t& nWeight)
+bool CWallet::GetStakeWeight2(const CKeyStore& keystore, uint64_t& nMinWeight, uint64_t& nMaxWeight, uint64_t& nWeight, uint64_t& nHoursToMaturity, uint64_t& nAmount)
 {
     // Choose coins to use
     int64_t nBalance = GetBalance();
@@ -1990,6 +2019,10 @@ bool CWallet::GetStakeWeight2(const CKeyStore& keystore, uint64_t& nMinWeight, u
     if (setCoins.empty())
         return false;
 
+	// variables for next stake calculation
+	uint64_t nPrevAge = 0;
+	uint64_t nStakeAge = 60 * 60 * 24 * 21 / 10;
+
     CTxDB txdb("r");
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -2000,13 +2033,25 @@ bool CWallet::GetStakeWeight2(const CKeyStore& keystore, uint64_t& nMinWeight, u
                 continue;
         }
 
+		// Time Until Next Maturity
+		uint64_t nCurrentAge = (int64_t)GetTime() - (int64_t)pcoin.first->nTime;
+		if (nCurrentAge > nPrevAge)
+		{
+			nPrevAge = nCurrentAge;
+			nHoursToMaturity = ((nStakeAge - nPrevAge) / 60 / 60) + 1;
+		}
+
         int64_t nTimeWeight = GetWeight2((int64_t)pcoin.first->nTime, (int64_t)GetTime());
         CBigNum bnCoinDayWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
+
+		if ((nStakeAge - nCurrentAge) < (60*60*24*2.1)) // if the age is less than 2.1 days, report weight as 0 because the stake modifier won't allow for stake yet
+			bnCoinDayWeight = 0;
 
         // Weight is greater than zero
         if (nTimeWeight > 0)
         {
             nWeight += bnCoinDayWeight.getuint64();
+			nAmount += (uint64_t)pcoin.first->vout[pcoin.second].nValue / COIN;
         }
 
         // Weight is greater than zero, but the maximum value isn't reached yet
@@ -2041,6 +2086,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     // Choose coins to use
     int64_t nBalance = GetBalance();
+    int64_t nReserveBalance = 0;
+    if (mapArgs.count("-reservebalance") && !ParseMoney(mapArgs["-reservebalance"], nReserveBalance))
+        return error("CreateCoinStake : invalid reserve balance amount");
 
     if (nBalance <= nReserveBalance)
         return false;
@@ -2607,7 +2655,7 @@ std::map<CTxDestination, int64_t> CWallet::GetAddressBalances()
         {
             CWalletTx *pcoin = &walletEntry.second;
 
-            if (!pcoin->IsFinal() || !pcoin->IsTrusted())
+            if (!pcoin->IsFinal() || !pcoin->IsConfirmed())
                 continue;
 
             if ((pcoin->IsCoinBase() || pcoin->IsCoinStake()) && pcoin->GetBlocksToMaturity() > 0)
@@ -2742,7 +2790,7 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, in
 		// presstab HyperStake
 		// This finds and deletes transactions that were never accepted by the network
 		// needs to be located above the readtxindex code or else it will not be triggered
-		if(!pcoin->IsTrusted() && (GetTime() - pcoin->GetTxTime()) > (60*10)) //give the tx 10 minutes before considering it failed
+		if(!pcoin->IsConfirmed() && (GetTime() - pcoin->GetTxTime()) > (60*10)) //give the tx 10 minutes before considering it failed
         {
            nOrphansFound++;
            if (!fCheckOnly)
