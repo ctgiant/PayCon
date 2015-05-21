@@ -198,7 +198,7 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx)
         {
             status.status = TransactionStatus::Offline;
         }
-        else if (status.depth < NumConfirmations)
+        else if (status.depth < RecommendedNumConfirmations)
         {
             status.status = TransactionStatus::Unconfirmed;
         }
