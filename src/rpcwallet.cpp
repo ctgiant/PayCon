@@ -1653,9 +1653,9 @@ Value walletpassphrase(const Array& params, bool fHelp)
 {
     if (pwalletMain->IsCrypted() && (fHelp || params.size() < 2 || params.size() > 3))
         throw runtime_error(
-            "walletpassphrase <passphrase> <timeout> [stakingonly]\n"
+            "walletpassphrase <passphrase> <timeout> [mintonly]\n"
             "Stores the wallet decryption key in memory for <timeout> seconds.\n"
-            "if [stakingonly] is true sending functions are disabled.");
+            "if [mintonly] is true sending functions are disabled.");
     if (fHelp)
         return true;
     if (!pwalletMain->IsCrypted())

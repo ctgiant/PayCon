@@ -306,8 +306,8 @@ QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) cons
             status += "\n" + tr("This block was not received by any other nodes and will probably not be accepted!");
             break;
         case TransactionStatus::Mature:
-            status += "\n" + tr("Generated and accepted, happy days!");
-            break;
+            status += "\n" + tr("Confirmed (%1 of %2 recommended confirmations)").arg(wtx->status.depth).arg(TransactionRecord::RecommendedNumConfirmations);
+        break;
         case TransactionStatus::NotAccepted:
             status += "\n" + tr("Generated but not accepted");
             break;
@@ -457,6 +457,8 @@ QVariant TransactionTableModel::txStatusDecoration(const TransactionRecord *wtx)
             int part = (wtx->status.depth * 4 / total) + 1;
             return QIcon(QString(":/icons/transaction_%1").arg(part));
             }
+        case TransactionStatus::Mature:
+            return QIcon(":/icons/transaction_confirmed");
         case TransactionStatus::MaturesWarning:
         case TransactionStatus::NotAccepted:
             return QIcon(":/icons/transaction_0");

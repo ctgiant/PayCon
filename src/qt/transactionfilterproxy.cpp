@@ -17,7 +17,7 @@ TransactionFilterProxy::TransactionFilterProxy(QObject *parent) :
     addrPrefix(),
     typeFilter(ALL_TYPES),
     minAmount(0),
-    limitRows(-1),
+    limitRows(-1)
 {
 }
 
