@@ -1075,7 +1075,7 @@ int64_t CWallet::GetUnconfirmedBalance() const
     return nTotal;
 }
 
-int64 CWallet::GetImmatureBalance() const
+int64_t CWallet::GetImmatureBalance() const
 {
     int64_t nTotal = 0;
     {
@@ -1676,7 +1676,7 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
     return true;
 }
 
-bool CWallet::SelectStakeCoins(std::set<std::pair<const CWalletTx*,unsigned int> >& setCoins, int64_t nTargetAmount) const
+bool CWallet::MintableCoins(std::set<std::pair<const CWalletTx*,unsigned int> >& setCoins, int64_t nTargetAmount) const
 {
 	vector<COutput> vCoins;
     AvailableCoins(vCoins, true);
@@ -1686,7 +1686,7 @@ bool CWallet::SelectStakeCoins(std::set<std::pair<const CWalletTx*,unsigned int>
 	{
 		if(nAmountSelected + out.tx->vout[out.i].nValue < nTargetAmount)
 		{
-			if(GetTime() - out.tx->GetTxTime() > nStakeMinAgeV2)
+            if(GetTime() - out.tx->GetTxTime() > nStakeMinAge)
 			{
 				setCoins.insert(make_pair(out.tx, out.i));
 				nAmountSelected += out.tx->vout[out.i].nValue;
@@ -1941,7 +1941,7 @@ bool CWallet::GetStakeWeight(const CKeyStore& keystore, uint64_t& nMinWeight, ui
     // Choose coins to use
     int64_t nBalance = GetBalance();
 
-    int64 nReserveBalance = 0;
+    int64_t nReserveBalance = 0;
     if (mapArgs.count("-reservebalance") && !ParseMoney(mapArgs["-reservebalance"], nReserveBalance))
         return error("CreateCoinStake : invalid reserve balance amount");
     if (nBalance <= nReserveBalance)
@@ -2067,7 +2067,6 @@ bool CWallet::GetStakeWeight2(const CKeyStore& keystore, uint64_t& nMinWeight, u
 
 bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, CKey& key)
 {
-    CBlockIndex* pindexPrev = pindexBest;
     CBigNum bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
 

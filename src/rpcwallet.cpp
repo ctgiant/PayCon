@@ -1347,8 +1347,7 @@ Value listaccounts(const Array& params, bool fHelp)
                     mapAccountBalances[""] += r.second;
         }
 
-		if((wtx.IsCoinBaseOrStake() && wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
-			|| !wtx.IsCoinBaseOrStake())
+        if((wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0))
 		{
 			mapAccountBalances[strSentAccount] -= nFee;
 			mapAccountBalances[""] += nGeneratedMature;
@@ -2048,8 +2047,8 @@ Value getstaketx(const Array& params, bool fHelp)
 
 				int64_t nGeneratedImmature, nGeneratedMature, nFee2;
 				string strSentAccount;
-				list<pair<CTxDestination, int64> > listReceived;
-				list<pair<CTxDestination, int64> > listSent;
+                list<pair<CTxDestination, int64_t> > listReceived;
+                list<pair<CTxDestination, int64_t> > listSent;
 				wtx.GetAmounts(nGeneratedImmature, nGeneratedMature, listReceived, listSent, nFee2, strSentAccount);
 				uint64_t nGeneratedAmount = max (nGeneratedMature, nGeneratedImmature);
 				double nGeneratedAmount2 = max (nGeneratedMature, nGeneratedImmature); //uint64_t math not working
