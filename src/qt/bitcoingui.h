@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include <QSystemTrayIcon>
 
+#include "util.h" // for uint64_t
+
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
@@ -15,8 +17,11 @@ class ChatWindow;
 class AddressBookPage;
 class SendCoinsDialog;
 class SignVerifyMessageDialog;
+class StakeForCharityDialog;
 class Notificator;
 class RPCConsole;
+class WalletModel;
+class TransactionTableModel;
 
 QT_BEGIN_NAMESPACE
 class QLabel;
@@ -71,9 +76,10 @@ private:
     AddressBookPage *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
+    StakeForCharityDialog *stakeForCharityDialog;
 
     QLabel *labelEncryptionIcon;
-    QLabel *labelStakingIcon;
+    QLabel *labelMintingIcon;
     QLabel *labelConnectionsIcon;
     QLabel *labelBlocksIcon;
     QLabel *progressBarLabel;
@@ -97,16 +103,18 @@ private:
     QAction *toggleHideAction;
     QAction *exportAction;
     QAction *encryptWalletAction;
+	QAction *unlockWalletAction;
     QAction *backupWalletAction;
     QAction *changePassphraseAction;
-    QAction *unlockWalletAction;
-    QAction *lockWalletAction;
+    QAction *lockWalletToggleAction;
 	QAction *checkWalletAction;
 	QAction *repairWalletAction;
     QAction *aboutQtAction;
     QAction *openRPCConsoleAction;
 	QAction *themeDefaultAction;
 	QAction *themeCustomAction;
+	QAction *connectionIconAction;
+	QAction *stakingIconAction;
 
     QSystemTrayIcon *trayIcon;
     Notificator *notificator;
@@ -114,6 +122,18 @@ private:
     RPCConsole *rpcConsole;
 
     QMovie *syncIconMovie;
+
+    QMovie *miningIconMovie;
+
+    uint64_t nMinMax;
+    uint64_t nWeight;
+    uint64_t nNetworkWeight;
+	uint64_t nHoursToMaturity;
+	uint64_t nAmount;
+	bool fMultiSend;
+	bool fMultiSendNotify;
+	int nCharityPercent;
+	QString strCharityAddress;
 	
 	/* Themes support */
     QString selectedTheme;
@@ -178,13 +198,12 @@ private slots:
     void gotoSignMessageTab(QString addr = "");
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
-
+	/** Allow user to unlock wallet from click */
+	void lockIconClicked();
     /** Show configuration dialog */
     void optionsClicked();
     /** Show about dialog */
     void aboutClicked();
-	/** Show Stake For Charity Dialog */
-    void charityClicked();
 #ifndef Q_OS_MAC
     /** Handle tray icon clicked */
     void trayIconActivated(QSystemTrayIcon::ActivationReason reason);
@@ -204,19 +223,26 @@ private slots:
     void backupWallet();
     /** Change encrypted wallet passphrase */
     void changePassphrase();
-    /** Ask for passphrase to unlock wallet temporarily */
-    void unlockWallet();
-
-    void lockWallet();
+	/** Lock Wallet */
+	void lockWallet();
+    /** Toggle unlocking wallet temporarily */
+    void lockWalletToggle();
+	/** Ask for passphrase to unlock wallet temporarily */
+	void unlockWallet();
+	/** Ask for passphrase to unlock wallet for the session to mint */
+	void unlockWalletForMint();
 
     /** Show window if hidden, unminimize when minimized, rise when obscured or show if hidden and fToggleHidden is true */
     void showNormalIfMinimized(bool fToggleHidden = false);
     /** simply calls showNormalIfMinimized(true) for use in SLOT() macro */
     void toggleHidden();
 
-    void updateStakingIcon();
-	
-	/** Load external QSS stylesheet */
+    /** Update info about minting */
+    void updateMintingIcon();
+    /** Update minting weight info */
+    void updateMintingWeights();
+    void charityClicked(QString addr = "");
+    /** Load external QSS stylesheet */
     void changeTheme(QString theme);
     void loadTheme(QString theme);
     void listThemes(QStringList& themes);
